@@ -21,7 +21,5 @@ just as important as their contents
 # usage
 
 Each application requires truly careful review and manual
-adjustments to the code to minimize the possiblity of
-harming important files.
-
-Read dedup.py for further usage information.
+adjustments to `dedup.py` code to minimize the possiblity of
+harming important files.  Use at your own risk.
