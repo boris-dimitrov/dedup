@@ -126,8 +126,9 @@ class MD5Hash(object):
                     subprocess.check_output(["/usr/bin/cmp", src_filename, dst_filename])
                 except:
                     tserr("Skipping due to mismatch: '{}' '{}'".format(src_filename, dst_filename))
-                subprocess.check_output(["/bin/ln", "-f", src_filename, dst_filename])
-                tsout("Deduplicated '{}' => '{}'".format(dst_filename, src_filename))
+                else:
+                    subprocess.check_output(["/bin/ln", "-f", src_filename, dst_filename])
+                    tsout("Deduplicated '{}' => '{}'".format(dst_filename, src_filename))
         finally:
             subprocs.release()
 
