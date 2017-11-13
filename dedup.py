@@ -9,6 +9,13 @@
 # for safety.  For example, any files under version control or subject to
 # modification must be left alone, even if they appear to be duplicates.
 #
+# When satisfied that only safe files are to be deduped,
+#
+#     cat boris.txt | ./dedup.py --implement
+#
+# Note that in the "implement" stage, deduplication messages will be echoed
+# in arbitrary order due to parallel execution.
+#
 
 import os
 import sys
@@ -109,11 +116,31 @@ class MD5Hash(object):
         self.files.append((md5_hash, n_link, size, file_name))
         self.current_size += (float(size) / n_link)
 
-def analyze():
+    def dedup(self):
+        try:
+            src = self.files[0]
+            for dst in self.files[1:]:
+                src_filename = src[3]
+                dst_filename = dst[3]
+                try:
+                    subprocess.check_output(["/usr/bin/cmp", src_filename, dst_filename])
+                except:
+                    tserr("Skipping due to mismatch: '{}' '{}'".format(src_filename, dst_filename))
+                subprocess.check_output(["/bin/ln", "-f", src_filename, dst_filename])
+                tsout("Deduplicated '{}' => '{}'".format(dst_filename, src_filename))
+        finally:
+            subprocs.release()
+
+
+def enqueue_dedup(md5):
+    subprocs.acquire()
+    threading.Thread(target=md5.dedup).start()
+
+
+def optimize(dry_run):
+    all_files = defaultdict(MD5Hash)
     files = defaultdict(MD5Hash)
     line_count = 0
-    eligible_count = 0
-    ignored_count = 0
     for line in sys.stdin:
         assert line
         line_count += 1
@@ -121,29 +148,40 @@ def analyze():
         md5_hash, n_link, size, file_name = line.split(None, 3)
         n_link = int(n_link)
         size = int(size)
+        all_files[md5_hash].add_file(md5_hash, n_link, size, file_name)
         if size < MIN_FILE_SIZE:
-            ignored_count += 1
             continue
-        eligible_count += 1
         files[md5_hash].add_file(md5_hash, n_link, size, file_name)
-    tsout("{} files eligible for deduplication = {:3.1f}% of {} total files.".format(eligible_count, 100.0*eligible_count/line_count, line_count))
-    tsout("{} duplicates = {:3.1f}% of {} eligible files.".format(eligible_count-len(files), 100.0 - 100.0*len(files)/eligible_count, eligible_count))
-    mb = 1024*1024
-    ideal = sum(f.ideal_size for f in files.itervalues()) / mb
-    current = sum(f.current_size for f in files.itervalues()) / mb
-    tsout("space savings {:.0f} MB = {:3.1f}% of {:.0f} MB current size.".format(current - ideal, 100.0 - 100.0*ideal/current, current))
+    mb = 1024*1024.0
+    operated_upon = []
     for md5 in sorted(files.itervalues(), key=lambda f: f.current_size - f.ideal_size):
         if md5.current_size - md5.ideal_size < MIN_DEDUP:
             continue
+        operated_upon.append(md5)
         tsout("")
         tsout("Save {:.1f} MB by deduping\n{}".format((md5.current_size - md5.ideal_size) / mb, "".join(["\n        " + f[3] for f in md5.files])))
         tsout("")
+        if not dry_run:
+            enqueue_dedup(md5)
+    if not dry_run:
+        for i in xrange(MAX_SUBPROCS):
+            subprocs.acquire()
+    ideal = sum(f.ideal_size for f in operated_upon) / mb
+    current = sum(f.current_size for f in operated_upon) / mb
+    total = sum(f.current_size for f in all_files.itervalues()) / mb
+    eligible_count = sum(len(f.files) for f in operated_upon)
+    tsout("Parameters: MIN_FILE_SIZE={:3.1f} MB, MIN_DEDUP={:3.1f} MB.".format(MIN_FILE_SIZE/mb, MIN_DEDUP/mb))
+    tsout("{} files eligible for deduplication = {:3.1f}% of {} total files.".format(eligible_count, 100.0*eligible_count/line_count, line_count))
+    tsout("Space savings {:.0f} MB = {:3.1f}% of {:.0f} MB total space.".format(current - ideal, 100.0*(current - ideal)/max(total,0.00001), total, MIN_DEDUP/mb))
+
 
 if __name__ == "__main__":
     if len(sys.argv) >= 2 and sys.argv[1].strip('-').lower() == "scan":
         scan()
     elif len(sys.argv) >= 2 and sys.argv[1].strip('-').lower() in ("analyze", "analyse", "analysis"):
-        analyze()
+        optimize(dry_run=True)
+    elif len(sys.argv) >= 2 and sys.argv[1].strip('-').lower() in ("optimize", "optimise", "implement", "implementation"):
+        optimize(dry_run=False)
     else:
         tserr("Unsupported command line.")
         sys.exit(-1)
