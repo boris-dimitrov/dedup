@@ -3,8 +3,9 @@ Help identify duplicate files that can be profitably replaced with hardlinks.
 
 # caution
 
-Replacing duplicates with hardlinks is generally unsafe.  It can be particularly
-bad for
+Replacing duplicates with hardlinks is generally unsafe.
+
+It can be particularly harmful to
 
   * files under version control
   
