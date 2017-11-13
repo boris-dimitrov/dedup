@@ -1,6 +1,9 @@
 # dedup
 Help identify duplicate files that can be profitably replaced with hardlinks.
 
+A dangerous bandaid for sorely missing Mac OS functionality.
+
+
 # caution
 
 Replacing duplicates with hardlinks is generally unsafe.
@@ -17,7 +20,6 @@ just as important as their contents
 
 # usage
 
-This is a bandaid for sorely missing Mac OS functionality.
 Each application requires truly careful review and manual
 adjustments to the code to minimize the possiblity of
 harming important files.
